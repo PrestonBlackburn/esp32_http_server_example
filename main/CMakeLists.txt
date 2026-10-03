@@ -7,6 +7,6 @@ else()
     list(APPEND requires esp_wifi esp_eth)
 endif()
 
-idf_component_register(SRCS "main.c"
+idf_component_register(SRCS "main.c" "wifi.c"
                     INCLUDE_DIRS "."
                     PRIV_REQUIRES ${requires})

@@ -14,8 +14,6 @@
 #include <nvs_flash.h>
 #include <sys/param.h>
 #include "esp_netif.h"
-#include "protocol_examples_common.h"
-#include "protocol_examples_utils.h"
 #include "esp_tls_crypto.h"
 #include <esp_http_server.h>
 #include "esp_event.h"
@@ -24,12 +22,11 @@
 #include "esp_check.h"
 #include <time.h>
 #include <sys/time.h>
-#if !CONFIG_IDF_TARGET_LINUX
 #include <esp_wifi.h>
 #include <esp_system.h>
 #include "nvs_flash.h"
 #include "esp_eth.h"
-#endif  // !CONFIG_IDF_TARGET_LINUX
+#include "wifi.h"
 
 #define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
 
@@ -38,6 +35,31 @@
  */
 
 static const char *TAG = "example";
+
+static int hex_val(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+/* dest must hold at least len + 1 bytes */
+static void uri_decode(char *dest, const char *src, size_t len)
+{
+    size_t o = 0;
+    for (size_t i = 0; i < len && src[i]; i++) {
+        if (src[i] == '%' && i + 2 < len + 0 + 1 && hex_val(src[i + 1]) >= 0 && hex_val(src[i + 2]) >= 0) {
+            dest[o++] = (char)((hex_val(src[i + 1]) << 4) | hex_val(src[i + 2]));
+            i += 2;
+        } else if (src[i] == '+') {
+            dest[o++] = ' ';
+        } else {
+            dest[o++] = src[i];
+        }
+    }
+    dest[o] = '\0';
+}
 
 /* An HTTP GET handler */
 static esp_err_t hello_get_handler(httpd_req_t *req)
@@ -90,17 +112,17 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
             /* Get value of expected key from query string */
             if (httpd_query_key_value(buf, "query1", param, sizeof(param)) == ESP_OK) {
                 ESP_LOGI(TAG, "Found URL query parameter => query1=%s", param);
-                example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
+                uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
                 ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
             }
             if (httpd_query_key_value(buf, "query3", param, sizeof(param)) == ESP_OK) {
                 ESP_LOGI(TAG, "Found URL query parameter => query3=%s", param);
-                example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
+                uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
                 ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
             }
             if (httpd_query_key_value(buf, "query2", param, sizeof(param)) == ESP_OK) {
                 ESP_LOGI(TAG, "Found URL query parameter => query2=%s", param);
-                example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
+                uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
                 ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
             }
         }
@@ -301,13 +323,11 @@ static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-#if CONFIG_IDF_TARGET_LINUX
     // Setting port as 8001 when building for Linux. Port 80 can be used only by a privileged user in linux.
     // So when a unprivileged user tries to run the application, it throws bind error and the server is not started.
     // Port 8001 can be used by an unprivileged user as well. So the application will not throw bind error and the
     // server will be started.
     config.server_port = 8001;
-#endif // !CONFIG_IDF_TARGET_LINUX
     config.lru_purge_enable = true;
 
     // Start the httpd server
@@ -327,7 +347,6 @@ static httpd_handle_t start_webserver(void)
     return NULL;
 }
 
-#if !CONFIG_IDF_TARGET_LINUX
 static esp_err_t stop_webserver(httpd_handle_t server)
 {
     // Stop the httpd server
@@ -357,7 +376,6 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
         *server = start_webserver();
     }
 }
-#endif // !CONFIG_IDF_TARGET_LINUX
 
 void app_main(void)
 {
@@ -367,25 +385,13 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
-    ESP_ERROR_CHECK(example_connect());
-
     /* Register event handlers to stop the server when Wi-Fi or Ethernet is disconnected,
      * and re-start it upon connection.
      */
-#if !CONFIG_IDF_TARGET_LINUX
-#ifdef CONFIG_EXAMPLE_CONNECT_WIFI
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
-#endif // CONFIG_EXAMPLE_CONNECT_WIFI
-#ifdef CONFIG_EXAMPLE_CONNECT_ETHERNET
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &connect_handler, &server));
-    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ETHERNET_EVENT_DISCONNECTED, &disconnect_handler, &server));
-#endif // CONFIG_EXAMPLE_CONNECT_ETHERNET
-#endif // !CONFIG_IDF_TARGET_LINUX
+
+    ESP_ERROR_CHECK(wifi_init_sta());
 
     /* Start the server for the first time */
     server = start_webserver();

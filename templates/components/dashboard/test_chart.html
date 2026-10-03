@@ -1,0 +1,36 @@
+<div id="chart-container"></div>
+
+<script>
+  // 1. Define data: [x-values, y-values]
+  const data = [
+    [1, 2, 3, 4, 5, 6],       // X-axis (e.g., time or indices)
+    [20, 40, 35, 50, 70, 65]  // Y-axis series values
+  ];
+
+  // 2. Define chart options
+  const opts = {
+    title: "My First uPlot Chart",
+    width: 600,
+    height: 400,
+    scales: {
+      x: { time: false }
+    },
+    series: [
+      {}, // First series config is for the X-axis
+      {
+        label: "Sales",
+        stroke: "red",
+        width: 2,
+        fill: "rgba(255, 0, 0, 0.1)"
+      }
+    ],
+    axes: [
+      {}, // X-axis defaults
+      {}  // Y-axis defaults
+    ]
+  };
+
+  // 3. Create the chart instance inside a target element
+  const target = document.getElementById("chart-container");
+  const chart = new uPlot(opts, data, target);
+</script>

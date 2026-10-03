@@ -4,3 +4,5 @@ __pycache__/**
 sdkconfig
 sdkconfig.old
 sdkconfig.secrets
+package-lock.json
+node_modules/**

@@ -8,6 +8,35 @@ The Example consists of HTTPD server demo with demonstration of URI handling :
     2. URI \echo for POST command echoes back the POSTed message
     3. URI \sse for GET command sends a message to client every second
 
+## Updated Structure
+
+```txt
+├── scripts/
+│   ├── schema.yaml           # THE CONTRACT — single source of truth
+│   ├── build_web.py          # renders templates, minifies, gzips → C
+│   └── preview.py            # renders to /tmp for browser iteration, no hardware
+├── templates/
+│   ├── base.html
+│   ├── components/layout/{top_navbar,footer}.html
+│   └── pages/
+│       ├── index.html
+│       └── partials/*.html   # pre-rendered structural fragments only
+├── static/
+│   ├── css/build.css         # Tailwind v4 output
+│   ├── js/{app.js, vendor/htmx.min.js, vendor/uplot.iife.min.js}
+│   └── img/
+└── main/
+    ├── main.c # lifecycle only
+    ├── web/
+    │   ├── web_server.c/.h   # start/stop, socket tuning, SSE plumbing
+    │   ├── web_assets.c/.h   # GENERATED: asset table + generic handler
+    │   └── web_api.c/.h      # hand-written: JSON handlers
+    ├── state/
+    │   ├── state.c/.h        # snapshot struct + accessors
+    │   └── state_schema.h    # GENERATED from schema.yaml
+    └── wifi.c/.h
+```
+
 ## User Callback
 
 The example includes a simple user callback that can be used to get the SSL context (connection information) when the server is being initialized. To enable the user callback, set `CONFIG_EXAMPLE_ENABLE_HTTPS_USER_CALLBACK` to `y` in the project configuration menu.
@@ -68,3 +97,5 @@ I (66460) example: Request headers lost
 
 ## Troubleshooting
 * If the server log shows "httpd_parse: parse_block: request URI/header too long", especially when handling POST requests, then you probably need to increase HTTPD_MAX_REQ_HDR_LEN, which you can find in the project configuration menu (`idf.py menuconfig`): Component config -> HTTP Server -> Max HTTP Request Header Length
+
+
