@@ -3,87 +3,116 @@
 
 # Simple HTTPD Server Example
 
-The Example consists of HTTPD server demo with demonstration of URI handling :
-    1. URI \hello for GET command returns "Hello World!" message
-    2. URI \echo for POST command echoes back the POSTed message
-    3. URI \sse for GET command sends a message to client every second
 
+
+
+## Updated Structure
+
+```txt
+http_server_test/
+├── CMakeLists.txt                    Root ESP-IDF project
+│                                     ├─ SDKCONFIG_DEFAULTS "sdkconfig.defaults" (+ .secrets if present)
+│                                     ├─ EXTRA_COMPONENT_DIRS → main/web_assets   ★ NEW
+│                                     └─ MINIMAL_BUILD ON
+├── sdkconfig.defaults                ★ 0 B — baseline config now empty
+├── sdkconfig.ci                      CI config variant
+├── sdkconfig.ci.ipv6_only            CI config variant
+├── sdkconfig.ci.sse                  CI config variant
+├── sdkconfig / .old / .secrets       Local only, gitignored
+├── dependencies.lock                 Committed lock → espressif/cjson
+├── requirements.txt                  jinja2, cffi
+├── package.json                      Tailwind v4 CLI (@tailwindcss/cli ^4.3.3)
+├── package-lock.json                 gitignored
+├── pytest_http_server_simple.py      Stock ESP-IDF pytest harness (see gaps below)
+├── README.md                         Contains "## Updated Structure" — STALE
+│
+├── main/                             ── FIRMWARE (ESP-IDF component "main")
+│   ├── CMakeLists.txt                SRCS: main.c, wifi.c
+│   │                                 REQUIRES: esp-tls nvs_flash esp_netif
+│   │                                           esp_http_server web_assets
+│   ├── idf_component.yml             ★ espressif/cjson: '*' + esp_stubs (linux only)
+│   ├── Kconfig.projbuild
+│   ├── main.c              (12 KB)   static_get_handler on "/*" → web_assets_find()
+│   │                                        + Content-Encoding: gzip   [main.c:116-125]
+│   ├── wifi.c / wifi.h
+│   ├── state/
+│   │   ├── state_struct.h   (427 B)  ★ Authoritative POD — cffi + C source of truth
+│   │   │                             state_t, db_measure_t (include-free)
+│   │   ├── state.h          (136 B)  Include shim
+│   │   ├── state.c          (0 B)    ★ Empty placeholder
+│   │   └── state_selftest.c (0 B)    ★ Empty placeholder
+│   ├── events.c / events.h (0 B)     ★ Empty placeholders
+│   ├── web_api.c / web_api.h (0 B)   ★ Empty placeholders
+│   └── web_assets/                   ★ NEW standalone ESP-IDF component
+│       ├── CMakeLists.txt (1.2 KB)   add_custom_command → build_web.py; EMBED_FILES *.gz
+│       │                             DEPENDS on templates/, static/, tools/web/*.py,
+│       │                             and main/state/state_struct.h
+│       ├── web_assets.c    (1.9 KB)  DECLARE_ASSET table + web_assets_find()
+│       └── web_assets.h    (233 B)   web_asset_t { data, len, mime }
+│
+├── tools/                            ★ NEW — build-time Python, moved OUT of firmware
+│   └── web/
+│       ├── schema.py      (4.3 KB)   cffi → dynamic dataclasses from state_struct.h
+│       ├── mock_data.py   (7.7 KB)   Synthetic state + 300-pt window + SSE payloads
+│       ├── preview.py     (4.3 KB)   Threaded preview server (/, /api/state, /events)
+│       └── build_web.py   (2.0 KB)   Render pages/*.html, gzip static, flatten by basename
+│
+├── managed_components/               ★ REPLACES vendored components/cJSON/
+│   └── espressif__cjson/
+│       ├── CMakeLists.txt  idf_component.yml  Kconfig
+│       ├── CHECKSUMS.json  sbom_cJSON.yml  LICENSE  README.md
+│       └── cJSON/                      Upstream: cJSON.c/.h, cJSON_Utils.c/.h,
+│                                       tests/ (unity), fuzzing/
+│
+├── templates/                        ── JINJA SOURCES (build time only)
+│   ├── _base.html        (1.1 KB)    ★ RENAMED from index.html — {% block content %}
+│   ├── pages/
+│   │   └── live_demo.html (353 B)    {% extends '_base.html' %} — the only rendered page
+│   └── components/
+│       ├── layout/
+│       │   ├── top_navbar.html (364 B)
+│       │   └── footer.html      (0 B) ★ Still empty but included by _base.html:31
+│       └── dashboard/
+│           ├── title.html        (371 B)
+│           ├── test_reading.html (4.2 KB)  Data-free `--` placeholders
+│           └── test_chart.html   (3.6 KB)  uPlot + SSE consumer
+│
+├── static/                           ── SERVED VERBATIM (gzipped at build)
+│   ├── css/
+│   │   ├── build.css   (13.2 KB)     Tailwind v4 output — still @imports Google Fonts
+│   │   └── uplot.css   (1.8 KB)
+│   ├── img/temp_logo.svg (283 B)
+│   └── js/
+│       ├── app.js       (2.3 KB)    ★ Shared /api/state bootstrap + single EventSource
+│       ├── htmx.min.js  (52.2 KB)
+│       ├── sse.min.js   (2.9 KB)    Loaded by _base.html; native EventSource actually used
+│       └── uplot.js     (36.3 KB)   uPlot 1.6.7
+│
+├── tailwind/
+│   ├── input.css        (3.2 KB)    Theme/palette source
+│   ├── package.json / package-lock.json
+│   └── readme.md
+│
+├── build/                            ESP-IDF output (gitignored)
+│   └── main/web_assets/web_out/*.gz  Rendered + gzipped assets (mtime=0, deterministic)
+├── node_modules/                     Tailwind install (gitignored)
+└── .venv/                            Python env (gitignored)
+```
+
+## Setup
 
 Add cjson dep - 
 ```bash
 idf.py add-dependency "espressif/cjson"
 ```
 
-## Updated Structure
-
-```txt
-http_server_test/
-├── CMakeLists.txt                    Root ESP-IDF project (MINIMAL_BUILD)
-├── sdkconfig.defaults                Baseline device config
-├── sdkconfig.ci{,.ipv6_only,.sse}    CI config variants
-├── sdkconfig                         Local, gitignored
-├── dependencies.lock                 idf_component.yml lock
-├── requirements.txt                  Python deps (cffi, jinja2)
-├── package.json / package-lock.json  Tailwind CLI orchestration
-├── pytest_http_server_simple.py      Root-level HTTP smoke test
-├── README.md
-│
-├── components/
-│   └── cJSON/                        Vendored cJSON (upstream, 130+ files)
-│       ├── cJSON.c/.h, cJSON_Utils.c/.h, CMakeLists.txt
-│       ├── fuzzing/  library_config/  tests/ (unity)
-│       └── README.md  LICENSE  Makefile  test.c
-│
-├── main/                             ── FIRMWARE (ESP-IDF component)
-│   ├── CMakeLists.txt                Compiles main.c + wifi.c ONLY
-│   ├── idf_component.yml
-│   ├── Kconfig.projbuild
-│   ├── main.c                        Entry point
-│   ├── wifi.c / wifi.h
-│   ├── state/
-│   │   ├── state.c / state.h
-│   │   ├── state_struct.h            ★ Authoritative POD structs (cffi source)
-│   │   └── state_selftest.c
-│   ├── events.c / events.h           ★ Not compiled yet
-│   ├── web_api.c / web_api.h         ★ Not compiled yet
-│   ├── web_assets.c (0 B)            ★ Empty — asset embedding target
-│   ├── web_assets.h (0 B)            ★ Empty
-│   └── web/                          ── BUILD-TIME PYTHON TOOLING
-│       ├── schema.py                 cffi → dynamic dataclasses
-│       ├── mock_data.py              Synthetic state + SSE payloads
-│       ├── preview.py                Threaded preview server
-│       ├── build_web.py              Stateless Jinja renderer
-│       ├── ffi_build.py (0 B)        Deferred cffi API-mode build
-│       └── __pycache__/              ★ Committed .pyc files (gitignored rule missed them)
-│
-├── templates/                        ── JINJA SOURCES (build time only)
-│   ├── index.html
-│   ├── pages/live_demo.html
-│   └── components/
-│       ├── layout/{top_navbar.html, footer.html (0 B)}
-│       └── dashboard/
-│           ├── title.html
-│           ├── test_reading.html     Data-free placeholders
-│           └── test_chart.html       uPlot + SSE
-│
-├── static/                           ── SERVED VERBATIM
-│   ├── css/{build.css (13 KB), uplot.css}
-│   ├── img/temp_logo.svg
-│   └── js/
-│       ├── app.js (2.3 KB)           ★ Shared /api/state + single SSE
-│       ├── htmx.min.js (52 KB)      Loaded; SSE extension unused
-│       ├── sse.min.js (2.9 KB)      Loaded; unused
-│       └── uplot.js (36 KB)         uPlot 1.6.7
-│
-├── tailwind/
-│   ├── input.css                     Theme/palette source
-│   ├── package.json
-│   └── readme.md
-│
-├── build/                            ESP-IDF output (gitignored)
-├── node_modules/                     Tailwind install (gitignored)
-└── .venv/                            Python env (gitignored)
+running
+```bash
+idf.py build
+idf.py flash
+idf.py monitor
 ```
+Check output at the IP provided in the logs
 
 ## User Callback
 
