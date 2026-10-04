@@ -1,0 +1,102 @@
+<div id="readings" class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+
+    <div class="col-span-2 rounded-lg border border-taupe-200 bg-white p-4 sm:col-span-3 xl:col-span-2">
+        <p class="text-xs font-medium uppercase tracking-wider text-taupe-500">Channel 1 amplitude</p>
+        <p class="mt-1 text-4xl font-semibold tabular-nums text-taupe-900">
+            <span data-stat="value">{{ '%.3f' % snap.samples[-1] if snap.samples else '--' }}</span>
+        </p>
+        <p class="mt-1 text-xs tabular-nums text-taupe-400">
+            seq <span data-stat="seq">--</span>
+        </p>
+    </div>
+
+    <div class="rounded-lg border border-taupe-200 bg-white p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-taupe-500">Uptime</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums text-taupe-900">
+            <span data-stat="uptime_s">{{ snap.uptime_s // 3600 }}:{{ '%02d' % (snap.uptime_s % 3600 // 60) }}:{{ '%02d' % (snap.uptime_s % 60) }}</span>
+        </p>
+    </div>
+
+    <div class="rounded-lg border border-taupe-200 bg-white p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-taupe-500">Signal</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums text-taupe-900">
+            <span data-stat="rssi">{{ snap.rssi }}</span>
+            <span class="text-sm font-normal text-taupe-400">dBm</span>
+        </p>
+    </div>
+
+    <div class="rounded-lg border border-taupe-200 bg-white p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-taupe-500">Heap</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums text-taupe-900">
+            <span data-stat="heap_free">{{ (snap.heap_free / 1024) | round(1) }}</span>
+            <span class="text-sm font-normal text-taupe-400">KB free</span>
+        </p>
+    </div>
+
+    <div class="rounded-lg border border-taupe-200 bg-white p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-taupe-500">Link</p>
+        <p class="mt-1 text-2xl font-semibold text-taupe-900">
+            <span class="inline-flex items-center gap-2">
+                <span data-dot="wifi_up" class="h-2.5 w-2.5 rounded-full {{ 'bg-dusty-olive-500' if snap.wifi_up else 'bg-cinnamon-wood-500' }}"></span>
+                <span data-stat="wifi_up">{{ 'Up' if snap.wifi_up else 'Down' }}</span>
+            </span>
+        </p>
+    </div>
+
+    <div class="rounded-lg border border-taupe-200 bg-white p-4">
+        <p class="text-xs font-medium uppercase tracking-wider text-taupe-500">Ch1 gain</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums text-taupe-900">
+            <span data-stat="ch1_gain_db">{{ '%+.2f' % snap.ch1_gain_db }}</span>
+            <span class="text-sm font-normal text-taupe-400">dB</span>
+        </p>
+    </div>
+
+</div>
+
+<style>
+    /* Set by App.onStatus below; dims the row when the stream is not up. */
+    body[data-stream="down"] #readings { opacity: 0.55; }
+</style>
+
+<script>
+  (() => {
+    // Snapshots arrive as a flat object, so each card declares which field it
+    // shows via data-stat and the mapping below stays declarative.
+    const cells = {};
+    document.querySelectorAll('[data-stat]').forEach((el) => { cells[el.dataset.stat] = el; });
+
+    const dots = {};
+    document.querySelectorAll('[data-dot]').forEach((el) => { dots[el.dataset.dot] = el; });
+
+    // These must match the server-side Jinja formatting exactly, otherwise the
+    // values visibly reformat on the first frame.
+    const fmt = {
+      value:        (v) => v.toFixed(3),
+      seq:          (v) => String(v),
+      rssi:         (v) => String(v),
+      heap_free:    (v) => (v / 1024).toFixed(1),
+      ch1_gain_db:  (v) => (v >= 0 ? '+' : '') + v.toFixed(2),
+      wifi_up:      (v) => (v ? 'Up' : 'Down'),
+      uptime_s:     (v) => {
+        const h = Math.floor(v / 3600);
+        const m = Math.floor((v % 3600) / 60);
+        return `${h}:${String(m).padStart(2, '0')}:${String(v % 60).padStart(2, '0')}`;
+      },
+    };
+
+    App.onFrame((frame) => {
+      for (const [field, el] of Object.entries(cells)) {
+        if (frame[field] === undefined) continue;
+        el.textContent = (fmt[field] || String)(frame[field]);
+      }
+
+      const dot = dots.wifi_up;
+      if (dot && frame.wifi_up !== undefined) {
+        dot.classList.toggle('bg-dusty-olive-500', frame.wifi_up);
+        dot.classList.toggle('bg-cinnamon-wood-500', !frame.wifi_up);
+      }
+    });
+
+    App.onStatus((state) => { document.body.dataset.stream = state; });
+  })();
+</script>
