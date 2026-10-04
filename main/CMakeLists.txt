@@ -1,4 +1,4 @@
-set(requires esp-tls nvs_flash esp_netif esp_http_server)
+set(requires esp-tls nvs_flash esp_netif esp_http_server web_assets)
 idf_build_get_property(target IDF_TARGET)
 
 if(${target} STREQUAL "linux")

@@ -906,7 +906,7 @@ static int apply_patch(cJSON *object, const cJSON *patch, const cJSON_bool case_
     if ((opcode == MOVE) || (opcode == COPY))
     {
         cJSON *from = get_object_item(patch, "from", case_sensitive);
-        if (!cJSON_IsString(from))
+        if (from == NULL)
         {
             /* missing "from" for copy/move. */
             status = 4;
@@ -1324,13 +1324,9 @@ static cJSON *merge_patch(cJSON *target, const cJSON * const patch, const cJSON_
 
     if (!cJSON_IsObject(patch))
     {
-        /* scalar value, array or NULL, just duplicate.
-         * Duplicate the patch first in case it is a subtree of target,
-         * otherwise cJSON_Delete(target) would free the patch memory
-         * and the subsequent cJSON_Duplicate would read freed memory. */
-        cJSON *duplicate = cJSON_Duplicate(patch, 1);
+        /* scalar value, array or NULL, just duplicate */
         cJSON_Delete(target);
-        return duplicate;
+        return cJSON_Duplicate(patch, 1);
     }
 
     if (!cJSON_IsObject(target))

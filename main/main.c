@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <inttypes.h>
 #include <esp_log.h>
 #include <nvs_flash.h>
 #include <sys/param.h>
@@ -27,6 +28,8 @@
 #include "nvs_flash.h"
 #include "esp_eth.h"
 #include "wifi.h"
+
+#include "web_assets.h"
 
 #define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
 
@@ -62,49 +65,73 @@ static void uri_decode(char *dest, const char *src, size_t len)
 }
 
 /* An HTTP GET handler */
-static esp_err_t landing_get_handler(httpd_req_t *req)
-{
-    char*  buf;
-    size_t buf_len;
+// static esp_err_t landing_get_handler(httpd_req_t *req)
+// {
+//     char*  buf;
+//     size_t buf_len;
 
-    /* Get header value string length and allocate memory for length + 1,
-     * extra byte for null termination */
-    buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
-    if (buf_len > 1) {
-        buf = malloc(buf_len);
-        ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
-        /* Copy null terminated value string into buffer */
-        if (httpd_req_get_hdr_value_str(req, "Host", buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found header => Host: %s", buf);
-        }
-        free(buf);
+//     /* Get header value string length and allocate memory for length + 1,
+//      * extra byte for null termination */
+//     buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
+//     if (buf_len > 1) {
+//         buf = malloc(buf_len);
+//         ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
+//         /* Copy null terminated value string into buffer */
+//         if (httpd_req_get_hdr_value_str(req, "Host", buf, buf_len) == ESP_OK) {
+//             ESP_LOGI(TAG, "Found header => Host: %s", buf);
+//         }
+//         free(buf);
+//     }
+
+//     /* Set some custom headers */
+//     httpd_resp_set_hdr(req, "Custom-Header-1", "Custom-Value-1");
+//     httpd_resp_set_hdr(req, "Custom-Header-2", "Custom-Value-2");
+
+//     /* Send response with custom headers and body set as the
+//      * string passed in user context*/
+//     // const char* resp_str = (const char*) req->user_ctx;
+//     // httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+
+//     const char* landing_html = 
+
+//     /* After sending the HTTP response the old HTTP request
+//      * headers are lost. Check if HTTP request headers can be read now. */
+//     if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
+//         ESP_LOGI(TAG, "Request headers lost");
+//     }
+//     return ESP_OK;
+// }
+
+// static const httpd_uri_t hello = {
+//     .uri       = "/hello",
+//     .method    = HTTP_GET,
+//     .handler   = landing_get_handler,
+//     /* Let's pass response string in user
+//      * context to demonstrate it's usage */
+//     .user_ctx  = "Hello World!"
+// };
+
+
+// http get for loaded static files
+static esp_err_t static_get_handler(httpd_req_t *req) {
+    const web_asset_t *static_asset = web_assets_find(req -> uri);
+    if (!static_asset) {
+        httpd_resp_send_404(req);
+        return ESP_OK;
     }
-
-    /* Set some custom headers */
-    httpd_resp_set_hdr(req, "Custom-Header-1", "Custom-Value-1");
-    httpd_resp_set_hdr(req, "Custom-Header-2", "Custom-Value-2");
-
-    /* Send response with custom headers and body set as the
-     * string passed in user context*/
-    const char* resp_str = (const char*) req->user_ctx;
-    httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
-
-    /* After sending the HTTP response the old HTTP request
-     * headers are lost. Check if HTTP request headers can be read now. */
-    if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
-        ESP_LOGI(TAG, "Request headers lost");
-    }
-    return ESP_OK;
+    httpd_resp_set_type(req, static_asset->mime);
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    return httpd_resp_send(req, (const char *)static_asset->data, static_asset->len);
 }
 
-static const httpd_uri_t hello = {
-    .uri       = "/hello",
-    .method    = HTTP_GET,
-    .handler   = landing_get_handler,
-    /* Let's pass response string in user
-     * context to demonstrate it's usage */
-    .user_ctx  = "Hello World!"
+static const httpd_uri_t static_files = {
+    .uri = "/*",
+    .method = HTTP_GET,
+    .handler = static_get_handler,
+    .user_ctx = NULL
 };
+
 
 /* An HTTP POST handler */
 static esp_err_t echo_post_handler(httpd_req_t *req)
@@ -212,14 +239,14 @@ static esp_err_t ctrl_put_handler(httpd_req_t *req)
     if (buf == '0') {
         /* URI handlers can be unregistered using the uri string */
         ESP_LOGI(TAG, "Unregistering /hello and /echo URIs");
-        httpd_unregister_uri(req->handle, "/hello");
+        // httpd_unregister_uri(req->handle, "/hello");
         httpd_unregister_uri(req->handle, "/echo");
         /* Register the custom error handler */
         httpd_register_err_handler(req->handle, HTTPD_404_NOT_FOUND, http_404_error_handler);
     }
     else {
         ESP_LOGI(TAG, "Registering /hello and /echo URIs");
-        httpd_register_uri_handler(req->handle, &hello);
+        // httpd_register_uri_handler(req->handle, &hello);
         httpd_register_uri_handler(req->handle, &echo);
         /* Unregister custom error handler */
         httpd_register_err_handler(req->handle, HTTPD_404_NOT_FOUND, NULL);
@@ -278,19 +305,21 @@ static httpd_handle_t start_webserver(void)
     // So when a unprivileged user tries to run the application, it throws bind error and the server is not started.
     // Port 8001 can be used by an unprivileged user as well. So the application will not throw bind error and the
     // server will be started.
-    config.server_port = 8001;
+    config.server_port = 80;
     config.lru_purge_enable = true;
+    config.uri_match_fn = httpd_uri_match_wildcard;
 
     // Start the httpd server
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
     if (httpd_start(&server, &config) == ESP_OK) {
         // Set URI handlers
         ESP_LOGI(TAG, "Registering URI handlers");
-        httpd_register_uri_handler(server, &hello);
+        // httpd_register_uri_handler(server, &hello);
         httpd_register_uri_handler(server, &echo);
         httpd_register_uri_handler(server, &ctrl);
         httpd_register_uri_handler(server, &any);
         httpd_register_uri_handler(server, &sse); // Register SSE handler
+        httpd_register_uri_handler(server, &static_files); // register last due to wildcard
         return server;
     }
 

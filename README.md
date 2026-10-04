@@ -8,6 +8,12 @@ The Example consists of HTTPD server demo with demonstration of URI handling :
     2. URI \echo for POST command echoes back the POSTed message
     3. URI \sse for GET command sends a message to client every second
 
+
+Add cjson dep - 
+```bash
+idf.py add-dependency "espressif/cjson"
+```
+
 ## Updated Structure
 
 ```txt
