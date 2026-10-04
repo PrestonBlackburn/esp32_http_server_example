@@ -1,7 +1,8 @@
 <div class="rounded-lg border border-taupe-200 bg-white p-4">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 class="text-sm font-semibold text-taupe-900">Channel 1 amplitude</h2>
+        <h2 class="text-sm font-semibold text-taupe-900">Pressure</h2>
         <p class="text-xs tabular-nums text-taupe-400">
+            <span class="mr-1">mPa</span>
             <span data-window-count>--</span> points
             <span class="mx-1">&middot;</span>
             <span data-window-span>--</span>s window
@@ -44,7 +45,7 @@
       series: [
         {},                                     // x
         {
-          label: 'Amplitude',
+          label: 'Pressure',
           stroke: line,
           width: 2,
           fill: `color-mix(in oklab, ${line} 12%, transparent)`,

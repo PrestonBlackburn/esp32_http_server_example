@@ -56,7 +56,7 @@ class PreviewHandler(SimpleHTTPRequestHandler):
     def _page(self, path: str) -> None:
         # Fresh env per request, so template edits appear on refresh.
         env = get_jinja_env(str(TEMPLATE_DIR))
-        html = env.get_template(PAGES[path]).render(**MOCK.page_context())
+        html = env.get_template(PAGES[path]).render()
         self._body(200, html.encode("utf-8"), "text/html; charset=utf-8")
 
     def _json(self, payload: dict) -> None:

@@ -9,6 +9,7 @@ const App = (() => {
   const frames = new Set();
   const statuses = new Set();
   let es = null;
+  let started = false;
 
   const notify = (set, payload) => set.forEach((fn) => fn(payload));
 
@@ -35,17 +36,38 @@ const App = (() => {
     es.onerror = () => notify(statuses, 'down');
   }
 
+  // The shipped HTML has no values baked into it -- the build machine has no
+  // state to bake. So the first paint comes from a one-shot /api/state read and
+  // the stream takes over from there. Fetching before connecting guarantees the
+  // snapshot is strictly older than the first stream frame, so displayed values
+  // can never step backwards.
+  async function bootstrap() {
+    try {
+      const res = await fetch('/api/state', { cache: 'no-store' });
+      if (res.ok) notify(frames, await res.json());
+    } catch (err) {
+      // Offline at load; the stream status callbacks report that.
+    }
+    connect();
+  }
+
+  function start() {
+    if (started) return;
+    started = true;
+    bootstrap();
+  }
+
   return {
     onFrame(fn) {
       frames.add(fn);
-      connect();
+      start();
       return () => frames.delete(fn);
     },
 
     onStatus(fn) {
       statuses.add(fn);
       fn(es && es.readyState === EventSource.OPEN ? 'open' : 'connecting');
-      connect();
+      start();
       return () => statuses.delete(fn);
     },
   };

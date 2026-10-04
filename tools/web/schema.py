@@ -133,8 +133,9 @@ if __name__ == "__main__":
     print(python_class(
         uptime_s=123, 
         heap_free=234, 
-        rssi = 7,
-        ch1_gain_db = 0.3,
+        temperature_c = 27,
+        raw_db = 67,
+        raw_pressure_mpa = 0.3,
         samples = [1,2,3],
         wifi_up = True)
     )

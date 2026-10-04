@@ -135,15 +135,18 @@ class MockState:
             120_000,
             min(260_000, self._snap.heap_free + rng.randint(-900, 700)),
         )
-        rssi = max(-90, min(-35, self._snap.rssi + rng.choice((-2, -1, 0, 0, 1, 2))))
-        gain = round(self._snap.ch1_gain_db + rng.uniform(-0.05, 0.05), 2)
+
+        raw_pressure_mpa = round(self.channel.latest(), 3)
+        raw_db = max(35, min(90, self._snap.raw_db + rng.choice((-2, -1, 0, 0, 1, 2))))
+        temperature_c = max(25, min(28, self._snap.temperature_c + rng.choice((-0.5, -0.2, 0, 0, 0.2, 0.5))))
 
         self._snap = replace(
             self._snap,
             uptime_s=int(now - self._boot),
             heap_free=heap,
-            rssi=rssi,
-            ch1_gain_db=gain,
+            raw_db = raw_db,
+            raw_pressure_mpa = raw_pressure_mpa,
+            temperature_c = temperature_c,
             wifi_up=self._outage_until == 0.0,
             samples=self.channel.tail(8),
         )
@@ -184,11 +187,6 @@ class MockState:
             payload["value"] = self.channel.latest()
             payload["window"] = self.channel.as_lists()
             return payload
-
-    def page_context(self) -> dict[str, Any]:
-        """Server-side values for the initial render, so the page shows real
-        numbers before the stream connects."""
-        return {"snap": self.snapshot()}
 
     def wait_tick(self, last_seq: int, timeout: float = 2.0) -> int | None:
         """Block until the sequence advances.

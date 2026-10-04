@@ -11,30 +11,72 @@ The Example consists of HTTPD server demo with demonstration of URI handling :
 ## Updated Structure
 
 ```txt
-├── scripts/
-│   ├── schema.yaml           # THE CONTRACT — single source of truth
-│   ├── build_web.py          # renders templates, minifies, gzips → C
-│   └── preview.py            # renders to /tmp for browser iteration, no hardware
-├── templates/
-│   ├── base.html
-│   ├── components/layout/{top_navbar,footer}.html
-│   └── pages/
-│       ├── index.html
-│       └── partials/*.html   # pre-rendered structural fragments only
-├── static/
-│   ├── css/build.css         # Tailwind v4 output
-│   ├── js/{app.js, vendor/htmx.min.js, vendor/uplot.iife.min.js}
-│   └── img/
-└── main/
-    ├── main.c # lifecycle only
-    ├── web/
-    │   ├── web_server.c/.h   # start/stop, socket tuning, SSE plumbing
-    │   ├── web_assets.c/.h   # GENERATED: asset table + generic handler
-    │   └── web_api.c/.h      # hand-written: JSON handlers
-    ├── state/
-    │   ├── state.c/.h        # snapshot struct + accessors
-    │   └── state_schema.h    # GENERATED from schema.yaml
-    └── wifi.c/.h
+http_server_test/
+├── CMakeLists.txt                    Root ESP-IDF project (MINIMAL_BUILD)
+├── sdkconfig.defaults                Baseline device config
+├── sdkconfig.ci{,.ipv6_only,.sse}    CI config variants
+├── sdkconfig                         Local, gitignored
+├── dependencies.lock                 idf_component.yml lock
+├── requirements.txt                  Python deps (cffi, jinja2)
+├── package.json / package-lock.json  Tailwind CLI orchestration
+├── pytest_http_server_simple.py      Root-level HTTP smoke test
+├── README.md
+│
+├── components/
+│   └── cJSON/                        Vendored cJSON (upstream, 130+ files)
+│       ├── cJSON.c/.h, cJSON_Utils.c/.h, CMakeLists.txt
+│       ├── fuzzing/  library_config/  tests/ (unity)
+│       └── README.md  LICENSE  Makefile  test.c
+│
+├── main/                             ── FIRMWARE (ESP-IDF component)
+│   ├── CMakeLists.txt                Compiles main.c + wifi.c ONLY
+│   ├── idf_component.yml
+│   ├── Kconfig.projbuild
+│   ├── main.c                        Entry point
+│   ├── wifi.c / wifi.h
+│   ├── state/
+│   │   ├── state.c / state.h
+│   │   ├── state_struct.h            ★ Authoritative POD structs (cffi source)
+│   │   └── state_selftest.c
+│   ├── events.c / events.h           ★ Not compiled yet
+│   ├── web_api.c / web_api.h         ★ Not compiled yet
+│   ├── web_assets.c (0 B)            ★ Empty — asset embedding target
+│   ├── web_assets.h (0 B)            ★ Empty
+│   └── web/                          ── BUILD-TIME PYTHON TOOLING
+│       ├── schema.py                 cffi → dynamic dataclasses
+│       ├── mock_data.py              Synthetic state + SSE payloads
+│       ├── preview.py                Threaded preview server
+│       ├── build_web.py              Stateless Jinja renderer
+│       ├── ffi_build.py (0 B)        Deferred cffi API-mode build
+│       └── __pycache__/              ★ Committed .pyc files (gitignored rule missed them)
+│
+├── templates/                        ── JINJA SOURCES (build time only)
+│   ├── index.html
+│   ├── pages/live_demo.html
+│   └── components/
+│       ├── layout/{top_navbar.html, footer.html (0 B)}
+│       └── dashboard/
+│           ├── title.html
+│           ├── test_reading.html     Data-free placeholders
+│           └── test_chart.html       uPlot + SSE
+│
+├── static/                           ── SERVED VERBATIM
+│   ├── css/{build.css (13 KB), uplot.css}
+│   ├── img/temp_logo.svg
+│   └── js/
+│       ├── app.js (2.3 KB)           ★ Shared /api/state + single SSE
+│       ├── htmx.min.js (52 KB)      Loaded; SSE extension unused
+│       ├── sse.min.js (2.9 KB)      Loaded; unused
+│       └── uplot.js (36 KB)         uPlot 1.6.7
+│
+├── tailwind/
+│   ├── input.css                     Theme/palette source
+│   ├── package.json
+│   └── readme.md
+│
+├── build/                            ESP-IDF output (gitignored)
+├── node_modules/                     Tailwind install (gitignored)
+└── .venv/                            Python env (gitignored)
 ```
 
 ## User Callback
